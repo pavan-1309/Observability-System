@@ -1,0 +1,106 @@
+version: "3.8"
+
+services:
+  # Node demo app
+  app:
+    build: ./app
+    container_name: demo-app
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://jaeger:4318/v1/traces
+      - OTEL_SERVICE_NAME=demo-app
+      - LOGS_DIR=/app/logs   # 👈 ensures logs path matches server.js
+    volumes:
+      - ./logs:/app/logs     # 👈 mount host logs folder into container
+    restart: unless-stopped
+    networks:
+      - monitoring-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    environment:
+      - TZ=Asia/Kolkata
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/rules.yml:/etc/prometheus/rules.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--web.enable-lifecycle"
+    restart: unless-stopped
+    networks:
+      - monitoring-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    depends_on:
+      - prometheus
+      - loki
+      - jaeger
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana/dashboards:/etc/grafana/provisioning/dashboards
+    restart: unless-stopped
+    networks:
+      - monitoring-net
+
+  loki:
+    image: grafana/loki:2.8.2
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/loki-config.yaml
+    volumes:
+      - ./loki-config.yaml:/etc/loki/loki-config.yaml:ro
+      - ./loki-data:/loki-data
+      - ./loki-wal:/loki-wal
+    restart: unless-stopped
+    networks:
+      - monitoring-net
+
+  promtail:
+    image: grafana/promtail:2.8.2
+    container_name: promtail
+    volumes:
+      - ./promtail-config.yaml:/etc/promtail/config.yaml:ro
+      - ./logs:/app/logs:ro   # 👈 points to same logs dir as app
+    command: -config.file=/etc/promtail/config.yaml
+    networks:
+      - monitoring-net
+    depends_on:
+      - app
+      - loki
+
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: jaeger
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+      - "14268:14268"
+      - "4317:4317"
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    restart: unless-stopped
+    networks:
+      - monitoring-net
+
+volumes:
+  grafana-data:
+  loki-data:
+  loki-wal:
+
+networks:
+  monitoring-net:
+    driver: bridge

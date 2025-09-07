@@ -1,0 +1,81 @@
+{
+  "id": null,
+  "title": "Demo App Monitoring",
+  "tags": ["demo", "node", "prometheus", "loki", "jaeger"],
+  "timezone": "browser",
+  "schemaVersion": 37,
+  "version": 2,
+  "refresh": "10s",
+  "panels": [
+    {
+      "type": "timeseries",
+      "title": "HTTP Requests per Second",
+      "targets": [
+        {
+          "expr": "sum(rate(app_http_requests_total[1m])) by (route, status_code)",
+          "legendFormat": "{{route}} {{status_code}}",
+          "datasource": { "type": "prometheus", "uid": "PROM_DS" }
+        }
+      ],
+      "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Error Rate (%)",
+      "targets": [
+        {
+          "expr": "100 * (sum(rate(app_http_error_total[5m])) by (route)) / (sum(rate(app_http_requests_total[5m])) by (route))",
+          "legendFormat": "{{route}}",
+          "datasource": { "type": "prometheus", "uid": "PROM_DS" }
+        }
+      ],
+      "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 }
+    },
+    {
+      "type": "timeseries",
+      "title": "Success Rate (%)",
+      "targets": [
+        {
+          "expr": "100 * (sum(rate(app_http_success_total[5m])) by (route)) / (sum(rate(app_http_requests_total[5m])) by (route))",
+          "legendFormat": "{{route}}",
+          "datasource": { "type": "prometheus", "uid": "PROM_DS" }
+        }
+      ],
+      "gridPos": { "x": 0, "y": 8, "w": 12, "h": 8 }
+    },
+    {
+      "type": "timeseries",
+      "title": "95th Percentile Latency (s)",
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(app_http_request_duration_seconds_bucket[5m])) by (le, route))",
+          "legendFormat": "{{route}}",
+          "datasource": { "type": "prometheus", "uid": "PROM_DS" }
+        }
+      ],
+      "gridPos": { "x": 12, "y": 8, "w": 12, "h": 8 }
+    },
+    {
+      "type": "logs",
+      "title": "Application Logs",
+      "targets": [
+        {
+          "expr": "{job=\"promtail\"}",
+          "datasource": { "type": "loki", "uid": "LOKI_DS" }
+        }
+      ],
+      "gridPos": { "x": 0, "y": 16, "w": 24, "h": 8 }
+    },
+    {
+      "type": "traces",
+      "title": "Request Traces (Jaeger)",
+      "targets": [
+        {
+          "datasource": { "type": "jaeger", "uid": "JAEGER_DS" },
+          "query": "service.name=\"demo-app\""
+        }
+      ],
+      "gridPos": { "x": 0, "y": 24, "w": 24, "h": 10 }
+    }
+  ]
+}
